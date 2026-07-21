@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StyleTrace - 그래픽 이름 검색기</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Pretendard Font -->
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            DEFAULT: '#3B82F6',
+                            hover: '#2563EB',
+                            light: '#EFF6FF',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Pretendard', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'Roboto', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* STRICT RULE: Absolute sharp corners (border-radius: 0px) for ALL elements */
+        *, *::before, *::after {
+            border-radius: 0px !important;
+        }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            background-color: #FAFAFA;
+            color: #18181B;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #F4F4F5;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #A1A1AA;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #71717A;
+        }
+
+        /* Pulse loading animation bar */
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+        .animate-scan {
+            animation: scanline 1.5s ease-in-out infinite alternate;
+        }
+    </style>
+
+    <!-- Google Generative AI SDK Import Map -->
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/generative-ai": "https://esm.run/@google/generative-ai"
+        }
+      }
+    </script>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-brand selection:text-white">
+
+    <!-- Header -->
+    <header class="border-b border-zinc-200 bg-white sticky top-0 z-30">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-brand text-white font-black text-xl px-2 py-0.5 tracking-tighter">
+                    StyleTrace
+                </div>
+                <span class="text-xs font-mono text-zinc-500 uppercase tracking-widest border border-zinc-200 px-1.5 py-0.5">Lite v1.0</span>
+            </div>
+            <div class="hidden sm:flex items-center space-x-6 text-xs text-zinc-500 font-medium">
+                <span class="flex items-center"><i class="fa-solid fa-bolt text-brand mr-1.5"></i> 로그인 필요 없이</span>
+                <span class="flex items-center"><i class="fa-brands fa-pinterest text-red-500 mr-1.5"></i> 핀터레스트 최적화</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="max-w-6xl mx-auto px-4 sm:px-6 py-8 w-full flex-grow">
+        
+        <!-- Hero Tagline -->
+        <div class="mb-8 border-l-4 border-brand pl-4">
+            <h1 class="text-2xl sm:text-3xl font-extrabold text-zinc-900 tracking-tight">
+                디자이너를 위한 그래픽 효과 이름 검색기
+            </h1>
+            <p class="mt-1 text-sm sm:text-base text-zinc-600">
+                몰랐던 시각 효과의 이름과 핀터레스트 영문 검색 키워드를 찾아보세요.
+            </p>
+        </div>
+
+        <!-- 2-Column Responsive Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            
+            <!-- LEFT COLUMN: Upload & Input Area (5 Cols) -->
+            <div class="lg:col-span-5 flex flex-col gap-6">
+                
+                <div class="bg-white border border-zinc-300 p-5 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <label class="text-xs font-bold uppercase tracking-wider text-zinc-700 flex items-center">
+                            <i class="fa-solid fa-image text-brand mr-2"></i> 1. 이미지 업로드
+                        </label>
+                        <span id="fileInfoText" class="text-xs text-zinc-400 font-mono">JPG, PNG, WEBP</span>
+                    </div>
+
+                    <!-- Dropzone -->
+                    <div id="dropZone" 
+                         class="border-2 border-dashed border-zinc-300 bg-zinc-50 hover:bg-zinc-100 hover:border-brand transition-colors duration-150 relative min-h-[260px] flex flex-col items-center justify-center p-4 cursor-pointer group">
+                        
+                        <input type="file" id="fileInput" class="hidden" accept="image/*" />
+                        
+                        <!-- Default Upload Prompt -->
+                        <div id="uploadPrompt" class="text-center flex flex-col items-center">
+                            <div class="w-12 h-12 bg-white border border-zinc-300 flex items-center justify-center mb-3 group-hover:border-brand group-hover:text-brand transition-colors">
+                                <i class="fa-solid fa-cloud-arrow-up text-xl text-zinc-600 group-hover:text-brand"></i>
+                            </div>
+                            <p class="text-sm font-bold text-zinc-800">
+                                클릭하여 이미지를 선택하거나
+                            </p>
+                            <p class="text-xs text-zinc-500 mt-1">
+                                여기로 드래그 앤 드롭 하세요
+                            </p>
+                        </div>
+
+                        <!-- Image Preview Container -->
+                        <div id="previewContainer" class="hidden w-full h-full flex-col items-center justify-center relative">
+                            <img id="imagePreview" src="" alt="업로드 이미지 미리보기" class="max-h-[240px] max-w-full object-contain border border-zinc-200 bg-white" />
+                            
+                            <button id="removeImgBtn" type="button" 
+                                    class="absolute top-2 right-2 bg-zinc-900 text-white text-xs px-2 py-1 font-bold hover:bg-red-600 transition-colors flex items-center gap-1 shadow">
+                                <i class="fa-solid fa-xmark"></i> 삭제
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Preset Samples (Quick Test) -->
+                    <div class="mt-4 pt-4 border-t border-zinc-200">
+                        <span class="text-xs text-zinc-500 font-medium block mb-2">샘플 레퍼런스로 빠른 테스트:</span>
+                        <div class="grid grid-cols-4 gap-2">
+                            <button type="button" class="sample-btn border border-zinc-300 hover:border-brand p-1 bg-zinc-100 transition-all text-left group" data-sample="chrome">
+                                <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=300&q=80" alt="Liquid Chrome" class="w-full h-10 object-cover mb-1" crossorigin="anonymous">
+                                <span class="text-[10px] font-mono text-zinc-600 block truncate group-hover:text-brand">Liquid Chrome</span>
+                            </button>
+                            <button type="button" class="sample-btn border border-zinc-300 hover:border-brand p-1 bg-zinc-100 transition-all text-left group" data-sample="duotone">
+                                <img src="https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=300&q=80" alt="Gradient Duotone" class="w-full h-10 object-cover mb-1" crossorigin="anonymous">
+                                <span class="text-[10px] font-mono text-zinc-600 block truncate group-hover:text-brand">Cyber Duotone</span>
+                            </button>
+                            <button type="button" class="sample-btn border border-zinc-300 hover:border-brand p-1 bg-zinc-100 transition-all text-left group" data-sample="glass">
+                                <img src="https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?auto=format&fit=crop&w=300&q=80" alt="Glassmorphism" class="w-full h-10 object-cover mb-1" crossorigin="anonymous">
+                                <span class="text-[10px] font-mono text-zinc-600 block truncate group-hover:text-brand">Frosted Glass</span>
+                            </button>
+                            <button type="button" class="sample-btn border border-zinc-300 hover:border-brand p-1 bg-zinc-100 transition-all text-left group" data-sample="halftone">
+                                <img src="https://plus.unsplash.com/premium_photo-1762066090781-ba46b9163d41?w=700&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MXx8aGFsZnRvbmUlMjByZXRyb3xlbnwwfHwwfHx8MA%3D%3D" alt="Halftone Retro" class="w-full h-10 object-cover mb-1" crossorigin="anonymous">
+                                <span class="text-[10px] font-mono text-zinc-600 block truncate group-hover:text-brand">Halftone Grain</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analysis Action Button -->
+                <button id="analyzeBtn" 
+                        disabled 
+                        class="w-full py-4 px-6 bg-zinc-300 text-zinc-500 font-bold text-base tracking-wider uppercase transition-all duration-150 cursor-not-allowed flex items-center justify-center gap-2 border border-transparent shadow-sm">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>그래픽 효과 분석하기</span>
+                </button>
+
+                <!-- Usage Guidelines -->
+                <div class="bg-zinc-100 border border-zinc-200 p-4 text-xs text-zinc-600 space-y-1.5">
+                    <p class="font-bold text-zinc-800 flex items-center gap-1.5">
+                        <i class="fa-solid fa-circle-info text-brand"></i> 사용 팁
+                    </p>
+                    <p class="pl-4">· 포스터, 3D 아트웍, 패키지, UI 그래픽 등 표현 스타일이 명확한 레퍼런스일수록 정확도가 높아집니다.</p>
+                    <p class="pl-4">· 분석된 태그를 클릭하여 복사한 뒤 핀터레스트 검색창에 붙여넣어 보세요.</p>
+                </div>
+
+            </div>
+
+            <!-- RIGHT COLUMN: Output & Results Area (7 Cols) -->
+            <div class="lg:col-span-7">
+                
+                <!-- State 1: Initial Empty Placeholder -->
+                <div id="initialState" class="bg-white border border-zinc-300 p-8 text-center min-h-[420px] flex flex-col items-center justify-center">
+                    <div class="w-16 h-16 bg-zinc-100 border border-zinc-300 flex items-center justify-center mb-4 text-zinc-400">
+                        <i class="fa-solid fa-sliders text-2xl"></i>
+                    </div>
+                    <h3 class="text-base font-bold text-zinc-800 mb-1">대기 중</h3>
+                    <p class="text-xs text-zinc-500 max-w-sm">
+                        왼쪽 영역에 레퍼런스 이미지를 등록한 후 <br><strong class="text-zinc-700">[그래픽 효과 분석하기]</strong> 버튼을 누르면 이 곳에 결과 리포트가 나타납니다.
+                    </p>
+                </div>
+
+                <!-- State 2: Loading Indicator -->
+                <div id="loadingState" class="hidden bg-white border border-zinc-300 p-8 min-h-[420px] flex flex-col items-center justify-center relative overflow-hidden">
+                    <div class="w-full max-w-xs space-y-4 text-center">
+                        <!-- Custom Rectangular Spinner -->
+                        <div class="relative w-16 h-16 border-2 border-zinc-200 border-t-brand animate-spin mx-auto"></div>
+                        
+                        <div>
+                            <p class="text-sm font-bold text-zinc-800 tracking-wide uppercase">AI Vision Processing</p>
+                            <p class="text-xs text-brand font-mono mt-1 font-semibold animate-pulse">Gemini Vision AI 비주얼 파싱 중...</p>
+                        </div>
+
+                        <!-- Progress indicator bar -->
+                        <div class="w-full bg-zinc-100 border border-zinc-200 h-2 relative overflow-hidden">
+                            <div class="bg-brand h-full w-full animate-scan"></div>
+                        </div>
+
+                        <p class="text-[11px] text-zinc-400 font-mono">
+                            질감, 컬러 매핑, 라이팅 디스플레이션 맵 스캔 중
+                        </p>
+                    </div>
+                </div>
+
+                <!-- State 3: Analysis Results Card -->
+                <div id="resultState" class="hidden bg-white border border-zinc-900 p-6 sm:p-8 shadow-sm relative">
+                    
+                    <!-- Result Header Badge -->
+                    <div class="flex items-center justify-between border-b border-zinc-200 pb-4 mb-6">
+                        <div class="flex items-center gap-2">
+                            <span class="bg-zinc-900 text-white text-[10px] font-mono font-bold px-2 py-0.5 uppercase tracking-wider">
+                                PARSED RESULT
+                            </span>
+                            <span class="text-xs text-emerald-600 font-mono font-semibold flex items-center gap-1">
+                                <i class="fa-solid fa-circle-check text-[10px]"></i> 분석 완료
+                            </span>
+                        </div>
+                        <span class="text-xs text-zinc-400 font-mono">Gemini 1.5 Flash Vision</span>
+                    </div>
+
+                    <!-- 1. Main Effect Title -->
+                    <div class="mb-6">
+                        <span class="text-xs font-bold uppercase tracking-wider text-zinc-400 block mb-1">
+                            주요 사용 효과명 (Main Style Effect)
+                        </span>
+                        <h2 id="resultTitle" class="text-2xl sm:text-3xl font-black text-zinc-900 tracking-tight flex items-center justify-between">
+                            -
+                        </h2>
+                    </div>
+
+                    <!-- 2. Effect Description -->
+                    <div class="mb-6 bg-zinc-50 border-l-2 border-brand p-4">
+                        <span class="text-xs font-bold uppercase tracking-wider text-zinc-500 block mb-1">
+                            효과 한 줄 설명 (Style Overview)
+                        </span>
+                        <p id="resultDesc" class="text-sm sm:text-base text-zinc-800 font-medium leading-relaxed">
+                            -
+                        </p>
+                    </div>
+
+                    <!-- 3. Visual Attributes breakdown (Extra UI Polish) -->
+                    <div class="mb-6 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div class="border border-zinc-200 p-2.5 bg-white">
+                            <span class="text-[10px] font-mono text-zinc-400 block uppercase">카테고리</span>
+                            <span id="resultCategory" class="text-xs font-bold text-zinc-800 truncate block">-</span>
+                        </div>
+                        <div class="border border-zinc-200 p-2.5 bg-white">
+                            <span class="text-[10px] font-mono text-zinc-400 block uppercase">주요 질감</span>
+                            <span id="resultTexture" class="text-xs font-bold text-zinc-800 truncate block">-</span>
+                        </div>
+                        <div class="border border-zinc-200 p-2.5 bg-white col-span-2 sm:col-span-1">
+                            <span class="text-[10px] font-mono text-zinc-400 block uppercase">추천 분야</span>
+                            <span id="resultUsage" class="text-xs font-bold text-zinc-800 truncate block">-</span>
+                        </div>
+                    </div>
+
+                    <!-- 4. Pinterest Search Tag Buttons -->
+                    <div class="mb-6 pt-2">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-xs font-bold uppercase tracking-wider text-zinc-700 flex items-center gap-1.5">
+                                <i class="fa-brands fa-pinterest text-red-500"></i> 핀터레스트 추천 영문 키워드
+                            </span>
+                            <button id="copyAllTagsBtn" type="button" class="text-xs text-brand hover:underline font-bold flex items-center gap-1">
+                                <i class="fa-regular fa-copy"></i> 전체 복사
+                            </button>
+                        </div>
+
+                        <p class="text-xs text-zinc-500 mb-3">
+                            태그를 클릭하면 즉시 클립보드에 복사되어 핀터레스트 검색에 활용할 수 있습니다.
+                        </p>
+
+                        <!-- Dynamic Tag Container -->
+                        <div id="resultTags" class="flex flex-wrap gap-2">
+                            <!-- Tags injected via JS -->
+                        </div>
+                    </div>
+
+                    <!-- Action Link Footer -->
+                    <div class="pt-4 border-t border-zinc-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <a id="pinterestDirectBtn" href="https://www.pinterest.com" target="_blank" rel="noopener noreferrer" 
+                           class="w-full sm:w-auto px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center justify-center gap-2 transition-colors">
+                            <i class="fa-brands fa-pinterest"></i>
+                            <span>핀터레스트에서 이 조합으로 직접 검색</span>
+                            <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                        </a>
+                        <span class="text-[11px] text-zinc-400 font-mono">StyleTrace Intelligence Engine</span>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-zinc-200 bg-white py-6 mt-12">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 text-center sm:text-left flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-500">
+            <div>
+                <span class="font-bold text-zinc-800">StyleTrace</span> — Minimalist Graphic Effect Tracer & Keyword Recommender
+            </div>
+            <div class="flex items-center space-x-4 font-mono text-[11px]">
+                <span>NO COOKIES</span>S
+                <span>•</span>
+                <span>NO SERVER STORAGE</span>
+                <span>•</span>
+                <span>100% FRONTEND</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-200 pointer-events-none">
+        <div class="bg-zinc-900 text-white px-5 py-3 border-l-4 border-brand shadow-xl flex items-center gap-3">
+            <i class="fa-solid fa-circle-check text-brand text-base"></i>
+            <div>
+                <p id="toastMessage" class="text-xs font-bold">복사되었습니다!</p>
+                <p class="text-[10px] text-zinc-400 font-mono">핀터레스트 검색창에 붙여넣기하세요.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🟢 type="module"을 추가하여 import 문법 정상 작동 처리 -->
+    <script type="module">
+        import { GoogleGenerativeAI } from "@google/generative-ai";
+
+        // ==========================================
+        // 🔑 GEMINI API KEY SETUP
+        // ==========================================
+        const GEMINI_API_KEY = "AQ.Ab8RN6IfKX91xQt1QLKztu3ZcYzBz70uE4BvXyp7AFcn3VHZrA"; // 본인의 실제 키 입력
+
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // DOM Elements
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('fileInput');
+            const uploadPrompt = document.getElementById('uploadPrompt');
+            const previewContainer = document.getElementById('previewContainer');
+            const imagePreview = document.getElementById('imagePreview');
+            const removeImgBtn = document.getElementById('removeImgBtn');
+            const analyzeBtn = document.getElementById('analyzeBtn');
+
+            const initialState = document.getElementById('initialState');
+            const loadingState = document.getElementById('loadingState');
+            const resultState = document.getElementById('resultState');
+
+            const resultTitle = document.getElementById('resultTitle');
+            const resultDesc = document.getElementById('resultDesc');
+            const resultCategory = document.getElementById('resultCategory');
+            const resultTexture = document.getElementById('resultTexture');
+            const resultUsage = document.getElementById('resultUsage');
+            const resultTags = document.getElementById('resultTags');
+            const copyAllTagsBtn = document.getElementById('copyAllTagsBtn');
+            const pinterestDirectBtn = document.getElementById('pinterestDirectBtn');
+            
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+
+            let currentImageSrc = null;
+
+            // Trigger File Selection
+            dropZone.addEventListener('click', (e) => {
+                if (e.target.closest('#removeImgBtn')) return;
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) handleImageFile(file);
+            });
+
+            // Drag and Drop Events
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.classList.add('border-brand', 'bg-blue-50/50');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropZone.classList.remove('border-brand', 'bg-blue-50/50');
+                }, false);
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const file = dt.files[0];
+                if (file && file.type.startsWith('image/')) {
+                    handleImageFile(file);
+                } else {
+                    showToast('이미지 파일(JPG, PNG 등)만 업로드 가능합니다.');
+                }
+            });
+
+            // Handle Selected Image
+            function handleImageFile(file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    setPreviewImage(e.target.result);
+                };
+                reader.readAsDataURL(file);
+            }
+
+            function setPreviewImage(src) {
+                currentImageSrc = src;
+                imagePreview.src = src;
+                uploadPrompt.classList.add('hidden');
+                previewContainer.classList.remove('hidden');
+                previewContainer.classList.add('flex');
+
+                // Enable Analyze Button
+                analyzeBtn.disabled = false;
+                analyzeBtn.classList.remove('bg-zinc-300', 'text-zinc-500', 'cursor-not-allowed');
+                analyzeBtn.classList.add('bg-brand', 'text-white', 'hover:bg-brand-hover', 'shadow-md', 'cursor-pointer');
+            }
+
+            // Remove Image Handler
+            removeImgBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                fileInput.value = '';
+                currentImageSrc = null;
+                imagePreview.src = '';
+                previewContainer.classList.add('hidden');
+                previewContainer.classList.remove('flex');
+                uploadPrompt.classList.remove('hidden');
+
+                // Disable Analyze Button
+                analyzeBtn.disabled = true;
+                analyzeBtn.classList.add('bg-zinc-300', 'text-zinc-500', 'cursor-not-allowed');
+                analyzeBtn.classList.remove('bg-brand', 'text-white', 'hover:bg-brand-hover', 'shadow-md', 'cursor-pointer');
+
+                // Reset Output area to Initial State
+                showState('initial');
+            });
+
+            // Preset Sample Buttons Logic
+            document.querySelectorAll('.sample-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const imgEl = btn.querySelector('img');
+                    if (imgEl) {
+                        const img = new Image();
+                        img.crossOrigin = 'Anonymous';
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(img, 0, 0);
+                            const dataURL = canvas.toDataURL('image/jpeg');
+                            setPreviewImage(dataURL);
+                        };
+                        img.onerror = () => {
+                            showToast('샘플 이미지를 불러오는 데 실패했습니다.');
+                        };
+                        img.src = imgEl.src;
+                    }
+                });
+            });
+
+            // Analyze Button Click Action
+            analyzeBtn.addEventListener('click', async () => {
+                if (!currentImageSrc) return;
+
+                showState('loading');
+
+                try {
+                    const parsedData = await analyzeImageWithGemini(currentImageSrc);
+                    renderResults(parsedData);
+                    showState('result');
+                } catch (error) {
+                    console.error("Gemini API Error:", error);
+                    showToast("분석 중 오류가 발생했습니다.");
+                    alert("이미지 분석 실패: " + error.message);
+                    showState('initial');
+                }
+            });
+
+            // ==========================================
+            // 🤖 GEMINI API SDK FUNCTION
+            // ==========================================
+            async function analyzeImageWithGemini(dataUrl) {
+                const base64Data = dataUrl.split(',')[1];
+                const mimeType = dataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
+
+                const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+                const model = genAI.getGenerativeModel({ model: "gemini-3.5-flash" });
+
+                const promptText = `Analyze this image for graphic designers. Identify the key visual style, effects, textures, and design aesthetic.
+Return ONLY a raw JSON object matching the schema below, without any markdown code block formatting (do not wrap in \`\`\`json).
+
+Schema:
+{
+  "title": "Main graphic style effect name in English & Korean",
+  "desc": "A clear 1-2 sentence description in Korean explaining the visual style",
+  "category": "Design Category",
+  "texture": "Primary textures",
+  "usage": "Recommended application fields",
+  "tags": ["Array of 5 to 7 Pinterest search keywords starting with #"]
+}`;
+
+                const imagePart = {
+                    inlineData: {
+                        data: base64Data,
+                        mimeType: mimeType
+                    }
+                };
+
+                const result = await model.generateContent([promptText, imagePart]);
+                const response = await result.response;
+                let rawText = response.text();
+
+                if (!rawText) throw new Error("API 응답 내용이 비어 있습니다.");
+
+                rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+                return JSON.parse(rawText);
+            }
+
+            // Toggle UI States
+            function showState(state) {
+                initialState.classList.add('hidden');
+                loadingState.classList.add('hidden');
+                resultState.classList.add('hidden');
+
+                if (state === 'initial') initialState.classList.remove('hidden');
+                if (state === 'loading') loadingState.classList.remove('hidden');
+                if (state === 'result') resultState.classList.remove('hidden');
+            }
+
+            // Render Output Cards
+            function renderResults(data) {
+                resultTitle.textContent = data.title || "알 수 없는 효과";
+                resultDesc.textContent = data.desc || "설명 정보가 없습니다.";
+                resultCategory.textContent = data.category || "General Graphic";
+                resultTexture.textContent = data.texture || "Standard Texture";
+                resultUsage.textContent = data.usage || "Various Design Fields";
+
+                resultTags.innerHTML = '';
+                const tags = Array.isArray(data.tags) ? data.tags : [];
+                
+                tags.forEach(tag => {
+                    const cleanTag = tag.startsWith('#') ? tag : `#${tag}`;
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'px-3 py-1.5 bg-zinc-100 hover:bg-brand hover:text-white border border-zinc-300 hover:border-brand text-xs font-mono font-medium text-zinc-800 transition-all duration-150 flex items-center gap-1.5 group cursor-pointer';
+                    btn.innerHTML = `<span>${cleanTag}</span> <i class="fa-regular fa-copy opacity-40 group-hover:opacity-100 text-[10px]"></i>`;
+                    
+                    btn.addEventListener('click', () => {
+                        copyToClipboard(cleanTag, `태그 [${cleanTag}] 복사 완료!`);
+                    });
+
+                    resultTags.appendChild(btn);
+                });
+
+                const searchKeywords = tags.map(t => t.replace(/^#/, '')).join(' ');
+                const searchQuery = encodeURIComponent(searchKeywords);
+                pinterestDirectBtn.href = `https://www.pinterest.com/search/pins/?q=${searchQuery}`;
+
+                copyAllTagsBtn.onclick = () => {
+                    const allTagsString = tags.join(' ');
+                    copyToClipboard(allTagsString, '모든 키워드가 복사되었습니다!');
+                };
+            }
+
+            function copyToClipboard(text, customMessage) {
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        showToast(customMessage);
+                    }).catch(() => {
+                        fallbackCopy(text, customMessage);
+                    });
+                } else {
+                    fallbackCopy(text, customMessage);
+                }
+            }
+
+            function fallbackCopy(text, customMessage) {
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-9999px";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast(customMessage);
+                } catch (err) {
+                    showToast('복사에 실패했습니다.');
+                }
+                document.body.removeChild(textArea);
+            }
+
+            let toastTimer = null;
+            function showToast(message) {
+                toastMessage.textContent = message || "복사되었습니다!";
+                toast.classList.remove('translate-y-20', 'opacity-0');
+                toast.classList.add('translate-y-0', 'opacity-100');
+
+                if (toastTimer) clearTimeout(toastTimer);
+                toastTimer = setTimeout(() => {
+                    toast.classList.add('translate-y-20', 'opacity-0');
+                    toast.classList.remove('translate-y-0', 'opacity-100');
+                }, 2500);
+            }
+
+        });
+    </script>
+</body>
+</html>
